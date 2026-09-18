@@ -24,10 +24,14 @@ class HistoryStore:
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump(self._data, f, ensure_ascii=False, indent=2)
 
+    def episode_ids(self) -> set[str]:
+        return {ep["episode_id"] for ep in self._data.get("episodes", []) if ep.get("episode_id")}
+
     def update(self, episodes: list[Episode]) -> int:
-        existing_ids = {ep["episode_id"] for ep in self._data["episodes"]}
+        existing_ids = self.episode_ids()
         new_eps = [ep.to_dict() for ep in episodes if ep.episode_id not in existing_ids]
-        self._data["episodes"].extend(new_eps)
+        # Prepend new episodes so the most recent episodes remain at the front
+        self._data["episodes"] = new_eps + self._data["episodes"]
         self._data["last_sync"] = datetime.now(timezone.utc).isoformat()
         self.save()
         return len(new_eps)

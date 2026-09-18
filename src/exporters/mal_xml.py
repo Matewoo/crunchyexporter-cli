@@ -37,6 +37,7 @@ class MALXMLExporter(BaseExporter):
             ET.SubElement(node, "my_status").text = status
             ET.SubElement(node, "update_on_import").text = "1"
             result.updated.append(s.series_title)
+            result.updated_ids.add(s.series_id)
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         tree = ET.ElementTree(root)

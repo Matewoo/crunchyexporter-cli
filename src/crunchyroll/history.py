@@ -17,14 +17,15 @@ class CRHistory:
             "Accept": "application/json, text/plain, */*",
         })
 
-    def fetch_all(self, locale: str = "en-US") -> list[Episode]:
+    def fetch_all(self, locale: str = "en-US", stop_at_existing: set[str] | None = None) -> list[Episode]:
         episodes = []
-        for ep in self._paginate(locale):
+        for ep in self._paginate(locale, stop_at_existing=stop_at_existing):
             episodes.append(ep)
         return episodes
 
-    def _paginate(self, locale: str) -> Iterator[Episode]:
+    def _paginate(self, locale: str, stop_at_existing: set[str] | None = None) -> Iterator[Episode]:
         page = 1
+        stop_ids = stop_at_existing or set()
         while True:
             items = self._fetch_page(page, locale)
             if not items:
@@ -32,6 +33,8 @@ class CRHistory:
             for item in items:
                 ep = self._parse_item(item)
                 if ep:
+                    if ep.episode_id in stop_ids:
+                        return
                     yield ep
             if len(items) < PAGE_SIZE:
                 break

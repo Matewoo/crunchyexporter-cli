@@ -41,8 +41,12 @@ def cli(ctx, config):
 @cli.command()
 @click.option("--etp-rt", default=None, help="Value of the etp_rt cookie from your browser session. Can also be set in config.yaml under crunchyroll.etp_rt.")
 @click.option("--replace", is_flag=True, default=False, help="Replace ALL existing local history instead of merging (incremental by default).")
+@click.option("--mode", "--exportmode", "mode",
+              type=click.Choice(["all", "onlynew"]),
+              default="all", show_default=True,
+              help="Fetch mode: 'all' fetches full history, 'onlynew' stops at first already-cached episode.")
 @click.pass_context
-def fetch(ctx, etp_rt, replace):
+def fetch(ctx, etp_rt, replace, mode="all"):
     """Fetch your Crunchyroll watch history and save it locally as JSON.
 
     \b
@@ -55,10 +59,12 @@ def fetch(ctx, etp_rt, replace):
     EXAMPLES:
       python src/main.py fetch --etp-rt "your-cookie-value"
       python src/main.py fetch                   (reads etp_rt from config.yaml)
+      python src/main.py fetch --mode onlynew    (incremental fetch, stops at known episode)
       python src/main.py fetch --replace         (full resync, discards local cache)
     """
     cfg = ctx.obj["config"]
     store_path = cfg.get("storage", {}).get("path", "data/history.json")
+    store = HistoryStore(Path(store_path))
 
     cr_cfg = cfg.get("crunchyroll", {})
     etp_rt = etp_rt or cr_cfg.get("etp_rt") or ""
@@ -79,11 +85,12 @@ def fetch(ctx, etp_rt, replace):
 
     console.print(f"[green]Logged in.[/green] Account ID: {token.account_id}")
 
+    stop_at = store.episode_ids() if (mode == "onlynew" and not replace and len(store) > 0) else None
+
     with console.status("[bold green]Fetching watch history..."):
         history = CRHistory(token)
-        episodes = history.fetch_all(locale=cfg.get("locale", "en-US"))
+        episodes = history.fetch_all(locale=cfg.get("locale", "en-US"), stop_at_existing=stop_at)
 
-    store = HistoryStore(Path(store_path))
     if replace:
         store.replace(episodes)
         console.print(f"[green]Saved {len(episodes)} episodes[/green] to {store_path} (replaced).")
@@ -142,8 +149,12 @@ def status(ctx):
               type=click.Choice(["anilist", "mal", "xml", "all"]),
               default="all", show_default=True,
               help="Where to export: anilist, mal, xml (local file), or all three at once.")
+@click.option("--mode", "--exportmode", "mode",
+              type=click.Choice(["all", "onlynew"]),
+              default="all", show_default=True,
+              help="Export mode: 'all' exports all series, 'onlynew' exports only series with new episodes since last export.")
 @click.pass_context
-def export(ctx, target):
+def export(ctx, target, mode="all"):
     """Export watch history to AniList, MyAnimeList and/or a local XML file.
 
     \b
@@ -152,6 +163,11 @@ def export(ctx, target):
       mal       Updates your MyAnimeList via API (requires OAuth setup in config.yaml)
       xml       Generates data/animelist.xml, importable at myanimelist.net/import.php
       all       Runs all three targets (default)
+
+    \b
+    MODES:
+      all       Exports all series in local history
+      onlynew   Exports only series not yet exported or with newly watched episodes
 
     \b
     FIRST-TIME SETUP:
@@ -165,7 +181,7 @@ def export(ctx, target):
     EXAMPLES:
       python src/main.py export                    (export to all targets)
       python src/main.py export --target xml       (local XML only, no auth needed)
-      python src/main.py export --target anilist   (AniList only)
+      python src/main.py export --target anilist --mode onlynew
     """
     cfg = ctx.obj["config"]
     store_path = cfg.get("storage", {}).get("path", "data/history.json")
@@ -176,24 +192,30 @@ def export(ctx, target):
         return
 
     summaries = store.series_summaries()
-    console.print(f"Exporting {len(summaries)} series...")
     log = ExportLog()
 
-    if target in ("xml", "all"):
-        _export_xml(cfg, summaries, log)
+    targets_to_run = ["xml", "anilist", "mal"] if target == "all" else [target]
 
-    if target in ("anilist", "all"):
-        _export_anilist(cfg, summaries, log)
+    for t in targets_to_run:
+        to_export = log.filter_series_for_export(t, summaries, mode=mode)
+        if mode == "onlynew" and not to_export:
+            console.print(f"[cyan]{t.upper()}:[/cyan] Everything up to date. No new series or episodes to export.")
+            continue
 
-    if target in ("mal", "all"):
-        _export_mal(cfg, summaries, log)
+        console.print(f"Exporting {len(to_export)} series to {t}...")
+        if t == "xml":
+            _export_xml(cfg, to_export, log)
+        elif t == "anilist":
+            _export_anilist(cfg, to_export, log)
+        elif t == "mal":
+            _export_mal(cfg, to_export, log)
 
 
 def _export_xml(cfg: dict, summaries, log: ExportLog):
     xml_path = cfg.get("exporters", {}).get("mal_xml", {}).get("path", "data/animelist.xml")
     with console.status("[bold]Generating MAL XML..."):
         result = MALXMLExporter(xml_path).export(summaries)
-    log.record("xml", result)
+    log.record("xml", result, summaries)
     console.print(f"[green]XML exported:[/green] {xml_path} ({len(result.updated)} series)")
 
 
@@ -211,7 +233,7 @@ def _export_anilist(cfg: dict, summaries, log: ExportLog):
 
     with console.status("[bold]Exporting to AniList..."):
         result = AniListExporter(token).export(summaries)
-    log.record("anilist", result)
+    log.record("anilist", result, summaries)
     _print_result("AniList", result)
 
 
@@ -235,7 +257,7 @@ def _export_mal(cfg: dict, summaries, log: ExportLog):
 
     with console.status("[bold]Exporting to MyAnimeList..."):
         result = MALExporter(token).export(summaries)
-    log.record("mal", result)
+    log.record("mal", result, summaries)
     _print_result("MyAnimeList", result)
 
 
@@ -251,8 +273,12 @@ def _print_result(name: str, result):
               type=click.Choice(["anilist", "mal", "xml", "all"]),
               default="all", show_default=True,
               help="Export targets to include in the sync.")
+@click.option("--mode", "--exportmode", "mode",
+              type=click.Choice(["all", "onlynew"]),
+              default="all", show_default=True,
+              help="Sync mode: 'all' fetches full history and exports all series, 'onlynew' stops fetch at known episodes and exports only newly updated series.")
 @click.pass_context
-def sync(ctx, target):
+def sync(ctx, target, mode="all"):
     """Fetch new history from Crunchyroll then export in one step.
 
     \b
@@ -263,6 +289,8 @@ def sync(ctx, target):
     EXAMPLES:
       python src/main.py sync
       python src/main.py sync --target anilist
+      python src/main.py sync --target anilist --mode onlynew
+      python src/main.py sync --target anilist --exportmode onlynew
     """
     cfg = ctx.obj["config"]
     cr_cfg = cfg.get("crunchyroll", {})
@@ -271,8 +299,8 @@ def sync(ctx, target):
         console.print("[red]sync requires etp_rt set in config.yaml[/red]")
         raise SystemExit(1)
 
-    ctx.invoke(fetch, etp_rt=etp_rt, replace=False)
-    ctx.invoke(export, target=target)
+    ctx.invoke(fetch, etp_rt=etp_rt, replace=False, mode=mode)
+    ctx.invoke(export, target=target, mode=mode)
 
 
 @cli.command()

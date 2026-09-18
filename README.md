@@ -197,9 +197,19 @@ python src/main.py export
 ### One-shot: fetch + export in a single command
 
 ```bash
-python src/main.py sync                      # fetch + export all targets
-python src/main.py sync --target anilist     # fetch + export AniList only
+python src/main.py sync                                        # fetch + export all targets
+python src/main.py sync --target anilist                       # fetch + export AniList only
+python src/main.py sync --target anilist --mode onlynew        # incremental: only new episodes & changed series
 ```
+
+> **Incremental mode (`--mode onlynew` or `--exportmode onlynew`):**
+> - In `fetch`: Stops paginating Crunchyroll immediately when it encounters the first already-stored episode.
+> - In `export`: Consults `export_log.json` to only update series that are new or have newly watched episodes since their last export to that target.
+> - Can also be used directly on `fetch` and `export`:
+>   ```bash
+>   python src/main.py fetch --mode onlynew
+>   python src/main.py export --target anilist --mode onlynew
+>   ```
 
 Requires `etp_rt` set in `config.yaml` (no interactive prompts).
 

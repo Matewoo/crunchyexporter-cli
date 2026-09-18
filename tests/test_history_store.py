@@ -90,6 +90,21 @@ def test_replace_overwrites(tmp_path):
     assert store.all_episodes()[0].episode_id == "E2"
 
 
+def test_episode_ids(tmp_path):
+    store = make_store(tmp_path)
+    assert store.episode_ids() == set()
+    store.update([make_ep(episode_id="E1"), make_ep(episode_id="E2")])
+    assert store.episode_ids() == {"E1", "E2"}
+
+
+def test_update_prepends_new_episodes(tmp_path):
+    store = make_store(tmp_path)
+    store.update([make_ep(episode_id="E1")])
+    store.update([make_ep(episode_id="E2")])
+    all_eps = store.all_episodes()
+    assert [ep.episode_id for ep in all_eps] == ["E2", "E1"]
+
+
 def test_replace_updates_last_sync(tmp_path):
     store = make_store(tmp_path)
     assert store.last_sync is None

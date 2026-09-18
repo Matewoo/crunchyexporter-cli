@@ -109,6 +109,7 @@ class MALExporter(BaseExporter):
                 status = self._determine_status(s, anime.get("num_episodes", 0))
                 self._update_list(anime["id"], status, s)
                 result.updated.append(s.series_title)
+                result.updated_ids.add(s.series_id)
             except Exception as e:
                 result.failed.append((s.series_title, str(e)))
         return result

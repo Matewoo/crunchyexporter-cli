@@ -129,6 +129,7 @@ class AniListExporter(BaseExporter):
                     variables["completedAt"] = self._fuzzy_date(s.last_watched_at)
                 self._gql(_UPSERT_MUTATION, variables)
                 result.updated.append(s.series_title)
+                result.updated_ids.add(s.series_id)
             except Exception as e:
                 result.failed.append((s.series_title, str(e)))
             time.sleep(0.6)
