@@ -44,9 +44,12 @@ class HistoryStore:
     def all_episodes(self) -> list[Episode]:
         return [Episode.from_dict(ep) for ep in self._data["episodes"]]
 
-    def series_summaries(self) -> list[SeriesSummary]:
+    def series_summaries(self, fully_watched_only: bool = False) -> list[SeriesSummary]:
         summaries: dict[str, SeriesSummary] = {}
         for ep in self.all_episodes():
+            if fully_watched_only and not ep.fully_watched:
+                continue
+
             if ep.series_id not in summaries:
                 summaries[ep.series_id] = SeriesSummary(
                     series_id=ep.series_id,

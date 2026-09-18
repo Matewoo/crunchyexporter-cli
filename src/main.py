@@ -153,8 +153,10 @@ def status(ctx):
               type=click.Choice(["all", "onlynew"]),
               default="all", show_default=True,
               help="Export mode: 'all' exports all series, 'onlynew' exports only series with new episodes since last export.")
+@click.option("--fullywatched", type=click.BOOL, default=False, show_default=True,
+              help="If true, only include fully watched episodes in series progress.")
 @click.pass_context
-def export(ctx, target, mode="all"):
+def export(ctx, target, mode="all", fullywatched=False):
     """Export watch history to AniList, MyAnimeList and/or a local XML file.
 
     \b
@@ -182,6 +184,7 @@ def export(ctx, target, mode="all"):
       python src/main.py export                    (export to all targets)
       python src/main.py export --target xml       (local XML only, no auth needed)
       python src/main.py export --target anilist --mode onlynew
+      python src/main.py export --target anilist --fullywatched true
     """
     cfg = ctx.obj["config"]
     store_path = cfg.get("storage", {}).get("path", "data/history.json")
@@ -191,7 +194,7 @@ def export(ctx, target, mode="all"):
         console.print("[yellow]No history to export. Run [bold]fetch[/bold] first.[/yellow]")
         return
 
-    summaries = store.series_summaries()
+    summaries = store.series_summaries(fully_watched_only=fullywatched)
     log = ExportLog()
 
     targets_to_run = ["xml", "anilist", "mal"] if target == "all" else [target]
@@ -277,8 +280,10 @@ def _print_result(name: str, result):
               type=click.Choice(["all", "onlynew"]),
               default="all", show_default=True,
               help="Sync mode: 'all' fetches full history and exports all series, 'onlynew' stops fetch at known episodes and exports only newly updated series.")
+@click.option("--fullywatched", type=click.BOOL, default=False, show_default=True,
+              help="If true, only include fully watched episodes in series progress.")
 @click.pass_context
-def sync(ctx, target, mode="all"):
+def sync(ctx, target, mode="all", fullywatched=False):
     """Fetch new history from Crunchyroll then export in one step.
 
     \b
@@ -291,6 +296,7 @@ def sync(ctx, target, mode="all"):
       python src/main.py sync --target anilist
       python src/main.py sync --target anilist --mode onlynew
       python src/main.py sync --target anilist --exportmode onlynew
+      python src/main.py sync --target anilist --fullywatched true
     """
     cfg = ctx.obj["config"]
     cr_cfg = cfg.get("crunchyroll", {})
@@ -300,7 +306,7 @@ def sync(ctx, target, mode="all"):
         raise SystemExit(1)
 
     ctx.invoke(fetch, etp_rt=etp_rt, replace=False, mode=mode)
-    ctx.invoke(export, target=target, mode=mode)
+    ctx.invoke(export, target=target, mode=mode, fullywatched=fullywatched)
 
 
 @cli.command()

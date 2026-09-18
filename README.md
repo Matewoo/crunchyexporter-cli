@@ -210,6 +210,13 @@ python src/main.py sync --target anilist --mode onlynew        # incremental: on
 >   python src/main.py fetch --mode onlynew
 >   python src/main.py export --target anilist --mode onlynew
 >   ```
+>
+> **Filter by fully watched episodes (`--fullywatched true`):**
+> - In `export` and `sync`: When set to `true`, only episodes marked by Crunchyroll as `fully_watched` will be considered for series progress. Default is `false`.
+>   ```bash
+>   python src/main.py sync --target anilist --fullywatched true
+>   python src/main.py export --target anilist --fullywatched true
+>   ```
 
 Requires `etp_rt` set in `config.yaml` (no interactive prompts).
 

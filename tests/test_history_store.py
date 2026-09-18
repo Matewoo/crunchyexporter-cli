@@ -108,6 +108,26 @@ def test_update_prepends_new_episodes(tmp_path):
 def test_replace_updates_last_sync(tmp_path):
     store = make_store(tmp_path)
     assert store.last_sync is None
+
+
+def test_series_summaries_fully_watched_only(tmp_path):
+    eps = [
+        make_ep(series_id="S1", episode_id="E1", episode_number=1.0, fully_watched=True),
+        make_ep(series_id="S1", episode_id="E2", episode_number=2.0, fully_watched=False),
+        make_ep(series_id="S2", episode_id="E3", episode_number=1.0, fully_watched=False),
+    ]
+    store = make_store(tmp_path, eps)
+
+    # With fully_watched_only=False (default), all episodes are included
+    all_summaries = {s.series_id: s for s in store.series_summaries(fully_watched_only=False)}
+    assert all_summaries["S1"].max_episode == 2
+    assert "S2" in all_summaries
+
+    # With fully_watched_only=True, only fully watched episodes are counted
+    fw_summaries = {s.series_id: s for s in store.series_summaries(fully_watched_only=True)}
+    assert fw_summaries["S1"].max_episode == 1
+    # S2 only has fully_watched=False, so it shouldn't have any series summary
+    assert "S2" not in fw_summaries
     store.replace([make_ep(episode_id="E1")])
     assert store.last_sync is not None
 

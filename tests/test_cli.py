@@ -29,6 +29,7 @@ def test_cli_export_mode_option():
     assert result.exit_code == 0
     assert "--mode" in result.output
     assert "--exportmode" in result.output
+    assert "--fullywatched" in result.output
 
 
 def test_cli_sync_mode_option():
@@ -37,6 +38,7 @@ def test_cli_sync_mode_option():
     assert result.exit_code == 0
     assert "--mode" in result.output
     assert "--exportmode" in result.output
+    assert "--fullywatched" in result.output
 
 
 @patch("src.main.CRHistory")
