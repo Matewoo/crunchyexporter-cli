@@ -47,12 +47,13 @@ def test_fetch_onlynew_passes_existing_ids(mock_auth, mock_history_cls, tmp_path
     store_file = tmp_path / "history.json"
     runner = CliRunner()
 
-    # Pre-populate history with an existing episode
+    # Pre-populate history with an existing episode that was fully watched
     from src.storage.history_store import HistoryStore
     store = HistoryStore(store_file)
     ep = Episode(
         series_id="S1", series_title="Anime 1", season_number=1,
-        episode_number=1.0, episode_title="Ep 1", episode_id="EP1"
+        episode_number=1.0, episode_title="Ep 1", episode_id="EP1",
+        fully_watched=True,
     )
     store.update([ep])
 
@@ -79,3 +80,46 @@ crunchyroll:
     mock_history_instance.fetch_all.assert_called_once()
     kwargs = mock_history_instance.fetch_all.call_args.kwargs
     assert kwargs.get("stop_at_existing") == {"EP1"}
+
+
+@patch("src.main.CRHistory")
+@patch("src.main.CRAuth")
+def test_fetch_onlynew_ignores_uncompleted_episodes_in_stop_at(mock_auth, mock_history_cls, tmp_path):
+    store_file = tmp_path / "history.json"
+    runner = CliRunner()
+
+    # Pre-populate history with an episode that was NOT fully watched
+    from src.storage.history_store import HistoryStore
+    store = HistoryStore(store_file)
+    ep = Episode(
+        series_id="S1", series_title="Anime 1", season_number=1,
+        episode_number=1.0, episode_title="Ep 1", episode_id="EP_UNCOMPLETED",
+        fully_watched=False,
+    )
+    store.update([ep])
+
+    mock_auth_instance = MagicMock()
+    mock_auth.return_value = mock_auth_instance
+    mock_auth_instance.login_with_etp_rt.return_value = MagicMock(account_id="acc123")
+
+    mock_history_instance = MagicMock()
+    mock_history_cls.return_value = mock_history_instance
+    mock_history_instance.fetch_all.return_value = []
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(f"""
+storage:
+  path: "{store_file}"
+crunchyroll:
+  etp_rt: "fake-cookie"
+""")
+
+    result = runner.invoke(cli, ["-c", str(config_file), "fetch", "--mode", "onlynew"])
+    assert result.exit_code == 0
+
+    # Because EP_UNCOMPLETED is not fully watched, fully_watched_episode_ids is empty,
+    # so stop_at_existing should be None or not contain EP_UNCOMPLETED.
+    mock_history_instance.fetch_all.assert_called_once()
+    kwargs = mock_history_instance.fetch_all.call_args.kwargs
+    stop_at = kwargs.get("stop_at_existing")
+    assert stop_at is None or "EP_UNCOMPLETED" not in stop_at

@@ -97,12 +97,36 @@ def test_episode_ids(tmp_path):
     assert store.episode_ids() == {"E1", "E2"}
 
 
+def test_fully_watched_episode_ids(tmp_path):
+    store = make_store(tmp_path)
+    assert store.fully_watched_episode_ids() == set()
+    store.update([
+        make_ep(episode_id="E1", fully_watched=True),
+        make_ep(episode_id="E2", fully_watched=False),
+    ])
+    assert store.fully_watched_episode_ids() == {"E1"}
+
+
 def test_update_prepends_new_episodes(tmp_path):
     store = make_store(tmp_path)
     store.update([make_ep(episode_id="E1")])
     store.update([make_ep(episode_id="E2")])
     all_eps = store.all_episodes()
     assert [ep.episode_id for ep in all_eps] == ["E2", "E1"]
+
+
+def test_update_refreshes_existing_episode(tmp_path):
+    store = make_store(tmp_path)
+    # Initially stored as partially watched
+    store.update([make_ep(episode_id="E1", fully_watched=False)])
+    assert store.all_episodes()[0].fully_watched is False
+
+    # Later fetched as fully watched
+    added = store.update([make_ep(episode_id="E1", fully_watched=True)])
+    assert added == 0  # not a brand new episode
+    assert len(store) == 1  # no duplicate created
+    assert store.all_episodes()[0].fully_watched is True  # updated successfully!
+    assert store.fully_watched_episode_ids() == {"E1"}
 
 
 def test_replace_updates_last_sync(tmp_path):

@@ -85,7 +85,10 @@ def fetch(ctx, etp_rt, replace, mode="all"):
 
     console.print(f"[green]Logged in.[/green] Account ID: {token.account_id}")
 
-    stop_at = store.episode_ids() if (mode == "onlynew" and not replace and len(store) > 0) else None
+    # When fetching onlynew, stop pagination at the first episode that is already known AND fully watched.
+    # We do NOT stop at uncompleted episodes (fully_watched=False), because their watch status or progress
+    # might have been updated on Crunchyroll since the last fetch.
+    stop_at = store.fully_watched_episode_ids() if (mode == "onlynew" and not replace and len(store) > 0) else None
 
     with console.status("[bold green]Fetching watch history..."):
         history = CRHistory(token)

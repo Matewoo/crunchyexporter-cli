@@ -27,14 +27,31 @@ class HistoryStore:
     def episode_ids(self) -> set[str]:
         return {ep["episode_id"] for ep in self._data.get("episodes", []) if ep.get("episode_id")}
 
+    def fully_watched_episode_ids(self) -> set[str]:
+        return {
+            ep["episode_id"]
+            for ep in self._data.get("episodes", [])
+            if ep.get("episode_id") and ep.get("fully_watched", False)
+        }
+
     def update(self, episodes: list[Episode]) -> int:
-        existing_ids = self.episode_ids()
-        new_eps = [ep.to_dict() for ep in episodes if ep.episode_id not in existing_ids]
-        # Prepend new episodes so the most recent episodes remain at the front
-        self._data["episodes"] = new_eps + self._data["episodes"]
+        incoming_by_id = {ep.episode_id: ep for ep in episodes if ep.episode_id}
+        existing_list = self._data.get("episodes", [])
+
+        # Filter out existing episodes that are being updated or moved
+        remaining_existing = [ep for ep in existing_list if ep.get("episode_id") not in incoming_by_id]
+        existing_ids = {ep.get("episode_id") for ep in existing_list if ep.get("episode_id")}
+
+        # Incoming episodes preserve order (newest first)
+        new_or_updated = [ep.to_dict() for ep in episodes]
+
+        # Calculate count of genuinely new episodes (not previously present)
+        new_count = sum(1 for ep in episodes if ep.episode_id not in existing_ids)
+
+        self._data["episodes"] = new_or_updated + remaining_existing
         self._data["last_sync"] = datetime.now(timezone.utc).isoformat()
         self.save()
-        return len(new_eps)
+        return new_count
 
     def replace(self, episodes: list[Episode]) -> None:
         self._data["episodes"] = [ep.to_dict() for ep in episodes]
