@@ -14,8 +14,15 @@ class ExportLog:
 
     def _load(self) -> dict:
         if self.path.exists():
-            with open(self.path, encoding="utf-8") as f:
-                return json.load(f)
+            try:
+                with open(self.path, encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if not content:
+                        return {}
+                    data = json.loads(content)
+                    return data if isinstance(data, dict) else {}
+            except (json.JSONDecodeError, OSError):
+                return {}
         return {}
 
     def save(self) -> None:

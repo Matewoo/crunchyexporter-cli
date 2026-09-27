@@ -14,10 +14,18 @@ class HistoryStore:
         self._data: dict = self._load()
 
     def _load(self) -> dict:
+        default = {"last_sync": None, "episodes": []}
         if self.path.exists():
-            with open(self.path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {"last_sync": None, "episodes": []}
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if not content:
+                        return default
+                    data = json.loads(content)
+                    return data if isinstance(data, dict) else default
+            except (json.JSONDecodeError, OSError):
+                return default
+        return default
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

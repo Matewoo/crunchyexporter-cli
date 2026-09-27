@@ -30,16 +30,20 @@ def make_raw_item(ep_id: str, series_id: str = "S1", ep_num: float = 1.0) -> dic
 
 def test_fetch_all_stops_at_existing_episode():
     h = make_history()
-    # Mock _fetch_page to return page 1 with episodes EP3, EP2, and page 2 with EP1
-    page1 = [make_raw_item("EP3", ep_num=3.0), make_raw_item("EP2", ep_num=2.0)]
-    page2 = [make_raw_item("EP1", ep_num=1.0)]
+    # Mock _fetch_page to return page 1 with episodes EP3, EP2, and next_page pointing to page 2
+    page1 = {
+        "data": [make_raw_item("EP3", ep_num=3.0), make_raw_item("EP2", ep_num=2.0)],
+        "meta": {"next_page": "/content/v2/acc/watch-history?page=2"},
+    }
+    page2 = {
+        "data": [make_raw_item("EP1", ep_num=1.0)],
+        "meta": {},
+    }
 
-    def fake_fetch_page(page, locale):
-        if page == 1:
-            return page1
-        elif page == 2:
+    def fake_fetch_page(url, params):
+        if "page=2" in str(url):
             return page2
-        return []
+        return page1
 
     h._fetch_page = MagicMock(side_effect=fake_fetch_page)
 
@@ -52,7 +56,10 @@ def test_fetch_all_stops_at_existing_episode():
 
 def test_fetch_all_without_stop_fetches_all():
     h = make_history()
-    page1 = [make_raw_item("EP3", ep_num=3.0), make_raw_item("EP2", ep_num=2.0)]
+    page1 = {
+        "data": [make_raw_item("EP3", ep_num=3.0), make_raw_item("EP2", ep_num=2.0)],
+        "meta": {},
+    }
 
     h._fetch_page = MagicMock(return_value=page1)
     eps = h.fetch_all()

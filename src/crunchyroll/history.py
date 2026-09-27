@@ -24,36 +24,51 @@ class CRHistory:
         return episodes
 
     def _paginate(self, locale: str, stop_at_existing: set[str] | None = None) -> Iterator[Episode]:
-        page = 1
         stop_ids = stop_at_existing or set()
-        while True:
-            items = self._fetch_page(page, locale)
+        next_url: str | None = f"{CR_CONTENT_BASE}/{self.token.account_id}/watch-history"
+        params: dict | None = {"page_size": PAGE_SIZE, "locale": locale}
+
+        while next_url:
+            resp_data = self._fetch_page(next_url, params)
+            items = resp_data.get("data", [])
             if not items:
                 break
+
             for item in items:
                 ep = self._parse_item(item)
                 if ep:
                     if ep.episode_id in stop_ids:
                         return
                     yield ep
-            if len(items) < PAGE_SIZE:
-                break
-            page += 1
 
-    def _fetch_page(self, page: int, locale: str) -> list[dict]:
-        url = f"{CR_CONTENT_BASE}/{self.token.account_id}/watch-history"
-        resp = self.session.get(
-            url,
-            params={
+            next_page = resp_data.get("meta", {}).get("next_page")
+            if next_page:
+                if next_page.startswith("http"):
+                    next_url = next_page
+                else:
+                    next_url = f"https://beta-api.crunchyroll.com{next_page}"
+                params = None  # query params are already encoded in next_page URL
+            else:
+                break
+
+    def _fetch_page(self, url_or_page: str | int, locale_or_params: str | dict | None = None) -> dict:
+        if isinstance(url_or_page, str) and url_or_page.startswith("http"):
+            url = url_or_page
+            params = locale_or_params if isinstance(locale_or_params, dict) else None
+        else:
+            # Backward compatibility if called with (page: int, locale: str)
+            url = f"{CR_CONTENT_BASE}/{self.token.account_id}/watch-history"
+            params = {
                 "page_size": PAGE_SIZE,
-                "page": page,
-                "locale": locale,
-            },
-            timeout=20,
-        )
+                "locale": locale_or_params if isinstance(locale_or_params, str) else "en-US",
+            }
+            if url_or_page != 1:
+                params["page"] = url_or_page
+
+        resp = self.session.get(url, params=params, timeout=20)
         if not resp.ok:
             raise RuntimeError(f"History fetch failed {resp.status_code}: {resp.text}")
-        return resp.json().get("data", [])
+        return resp.json()
 
     def _parse_item(self, item: dict) -> Episode | None:
         panel = item.get("panel", {})
